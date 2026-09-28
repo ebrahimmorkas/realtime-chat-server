@@ -88,6 +88,12 @@ export function createSocketServer(httpServer: HttpServer): SocketServerHandle {
   const presence = createPresenceStore();
   const messageLimiter = createMessageRateLimiter();
   const unbridge = bridgeChatEvents(io);
+  // In-flight async socket work, awaited on shutdown before Redis clients close.
+  const pending = new Set<Promise<void>>();
+  const track = (work: Promise<void>) => {
+    pending.add(work);
+    void work.finally(() => pending.delete(work));
+  };
 
   io.use((socket, next) => {
     const header = socket.handshake.headers.authorization;
@@ -153,7 +159,7 @@ export function createSocketServer(httpServer: HttpServer): SocketServerHandle {
       }),
     );
 
-    socket.on('disconnect', async () => {
+    const handleDisconnect = async () => {
       try {
         if (!(await presence.disconnect(user.id, socket.id))) return;
         const lastSeenAt = new Date();
@@ -169,38 +175,44 @@ export function createSocketServer(httpServer: HttpServer): SocketServerHandle {
       } catch (err) {
         logger.error({ err }, 'socket disconnect handling failed');
       }
-    });
+    };
+    socket.on('disconnect', () => track(handleDisconnect()));
 
-    void (async () => {
-      try {
-        const conversations = await ConversationModel.find(
-          { 'members.user': user.id },
-          { _id: 1 },
-        ).lean();
-        await socket.join([
-          userRoom(user.id),
-          ...conversations.map((c) => conversationRoom(c._id.toString())),
-        ]);
+    track(
+      (async () => {
+        try {
+          const conversations = await ConversationModel.find(
+            { 'members.user': user.id },
+            { _id: 1 },
+          ).lean();
+          await socket.join([
+            userRoom(user.id),
+            ...conversations.map((c) => conversationRoom(c._id.toString())),
+          ]);
 
-        const contacts = await contactIdsOf(user.id);
-        const cameOnline = await presence.connect(user.id, socket.id);
-        if (socket.disconnected) {
-          // The client left while we were setting up; undo the presence entry.
-          await presence.disconnect(user.id, socket.id);
-          return;
+          const contacts = await contactIdsOf(user.id);
+          const cameOnline = await presence.connect(user.id, socket.id);
+          if (socket.disconnected) {
+            // The client left while we were setting up; undo the presence entry.
+            await presence.disconnect(user.id, socket.id);
+            return;
+          }
+          if (cameOnline && contacts.length > 0) {
+            io.to(contacts.map(userRoom)).emit('presence:update', {
+              userId: user.id,
+              online: true,
+            });
+          }
+          socket.emit('session:ready', {
+            userId: user.id,
+            onlineContacts: await presence.onlineAmong(contacts),
+          });
+        } catch (err) {
+          logger.error({ err }, 'socket setup failed');
+          socket.disconnect(true);
         }
-        if (cameOnline && contacts.length > 0) {
-          io.to(contacts.map(userRoom)).emit('presence:update', { userId: user.id, online: true });
-        }
-        socket.emit('session:ready', {
-          userId: user.id,
-          onlineContacts: await presence.onlineAmong(contacts),
-        });
-      } catch (err) {
-        logger.error({ err }, 'socket setup failed');
-        socket.disconnect(true);
-      }
-    })();
+      })(),
+    );
   });
 
   return {
@@ -208,6 +220,7 @@ export function createSocketServer(httpServer: HttpServer): SocketServerHandle {
     close: async () => {
       unbridge();
       await io.close();
+      await Promise.allSettled([...pending]);
       await Promise.all([pubClient?.quit(), subClient?.quit()]);
     },
   };
