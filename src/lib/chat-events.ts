@@ -6,8 +6,8 @@ import { EventEmitter } from 'node:events';
  * business logic unaware of Socket.IO.
  */
 export interface ChatEventMap {
-  'conversation:created': { conversation: unknown; memberIds: string[] };
-  'conversation:updated': { conversation: unknown; memberIds: string[] };
+  'conversation:created': { conversation: { id: string }; memberIds: string[] };
+  'conversation:updated': { conversation: { id: string }; memberIds: string[] };
   'conversation:member-removed': { conversationId: string; userId: string; memberIds: string[] };
   'message:created': { conversationId: string; message: unknown };
   'message:updated': { conversationId: string; message: unknown };
