@@ -4,10 +4,12 @@ import { env } from './config/env.js';
 import { connectDb, disconnectDb } from './lib/db.js';
 import { logger } from './lib/logger.js';
 import { closeRedis } from './lib/redis.js';
+import { createSocketServer } from './realtime/socket-server.js';
 
 await connectDb();
 
 const httpServer = createServer(createApp());
+const sockets = createSocketServer(httpServer);
 
 httpServer.listen(env.PORT, () => {
   logger.info(`server listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
@@ -15,13 +17,13 @@ httpServer.listen(env.PORT, () => {
 
 async function shutdown(signal: string) {
   logger.info({ signal }, 'shutting down gracefully');
-  httpServer.close(async () => {
-    await disconnectDb();
-    await closeRedis();
-    logger.info('shutdown complete');
-    process.exit(0);
-  });
   setTimeout(() => process.exit(1), 10_000).unref();
+  // Closing Socket.IO also closes the underlying HTTP server.
+  await sockets.close();
+  await disconnectDb();
+  await closeRedis();
+  logger.info('shutdown complete');
+  process.exit(0);
 }
 
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
