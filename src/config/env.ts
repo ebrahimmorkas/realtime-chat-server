@@ -20,6 +20,10 @@ const envSchema = z.object({
   REDIS_ENABLED: booleanFromString,
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+
   MESSAGE_RATE_LIMIT: z.coerce.number().int().positive().default(20),
   MESSAGE_RATE_WINDOW_MS: z.coerce.number().int().positive().default(10_000),
 });
