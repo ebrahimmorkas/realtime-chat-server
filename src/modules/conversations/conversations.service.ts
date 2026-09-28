@@ -98,7 +98,7 @@ export async function openDirectConversation(userId: string, otherUserId: string
           lastMessageAt: new Date(),
         },
       },
-      { upsert: true, new: true, includeResultMetadata: true },
+      { upsert: true, returnDocument: 'after', includeResultMetadata: true },
     );
 
   let result;
