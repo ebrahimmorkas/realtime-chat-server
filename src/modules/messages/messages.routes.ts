@@ -2,14 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
-import { MAX_MESSAGE_LENGTH } from './message.model.js';
+import { messageText, sendMessageSchema } from './messages.schemas.js';
 import * as messages from './messages.service.js';
-
-export const messageText = z.string().trim().min(1).max(MAX_MESSAGE_LENGTH);
-export const sendMessageSchema = z.object({
-  text: messageText,
-  clientId: z.string().trim().min(1).max(64).optional(),
-});
 
 const listQuery = z.object({
   before: z.string().optional(),
