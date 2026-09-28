@@ -1,6 +1,7 @@
 import { isValidObjectId, Types } from 'mongoose';
 import { chatEvents } from '../../lib/chat-events.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
+import { unreadCounts } from '../messages/unread.js';
 import { UserModel, toPublicUser, type UserDocument } from '../users/user.model.js';
 import {
   ConversationModel,
@@ -236,5 +237,13 @@ export async function listConversations(userId: string) {
     .sort({ lastMessageAt: -1 })
     .limit(100)
     .populate({ path: 'members.user', select: MEMBER_FIELDS });
-  return conversations.map((c) => serializeConversation(c));
+
+  const counts = await unreadCounts(
+    userId,
+    conversations.map((c) => ({
+      conversationId: c.id as string,
+      lastReadAt: findMember(c, userId)!.lastReadAt,
+    })),
+  );
+  return conversations.map((c) => serializeConversation(c, counts.get(c.id as string) ?? 0));
 }
