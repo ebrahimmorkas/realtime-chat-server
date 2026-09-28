@@ -1,0 +1,47 @@
+# Single instance, no Redis:
+#   docker compose up --build
+# Single instance with Redis (presence + rate limits in Redis):
+#   REDIS_ENABLED=true docker compose --profile redis up --build
+# Two instances behind a load balancer (Redis adapter required):
+#   docker compose -f docker-compose.yml -f docker-compose.scale.yml up --build
+
+services:
+  api:
+    build: .
+    ports:
+      - '4000:4000'
+    environment:
+      MONGO_URL: mongodb://mongo:27017/chat
+      JWT_SECRET: ${JWT_SECRET:-docker-dev-secret-change-me-please-32+}
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongodata:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', 'db.adminCommand("ping")']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    profiles: ['redis']
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mongodata:

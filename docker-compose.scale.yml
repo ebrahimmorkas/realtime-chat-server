@@ -1,0 +1,31 @@
+# Horizontal scaling demo: two API instances share rooms, broadcasts and
+# presence through Redis; nginx balances with sticky sessions (ip_hash) so
+# Socket.IO's HTTP long-polling handshake stays on one instance.
+services:
+  api:
+    ports: !reset []
+    environment:
+      REDIS_ENABLED: 'true'
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api2:
+    extends: api
+    environment:
+      REDIS_ENABLED: 'true'
+
+  redis:
+    profiles: !reset []
+
+  lb:
+    image: nginx:1.27-alpine
+    ports:
+      - '4000:80'
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - api2
