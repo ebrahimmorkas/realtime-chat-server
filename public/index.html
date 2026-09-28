@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Realtime Chat</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <section id="auth-view" class="auth">
+      <form id="auth-form" class="card">
+        <h1>Realtime Chat</h1>
+        <p class="muted" id="auth-subtitle">Sign in to start chatting</p>
+        <label class="register-only"
+          >Username <input name="username" autocomplete="username"
+        /></label>
+        <label class="register-only">Display name <input name="displayName" /></label>
+        <label class="register-only">Email <input name="email" type="email" /></label>
+        <label class="login-only"
+          >Username or email <input name="login" autocomplete="username"
+        /></label>
+        <label
+          >Password <input name="password" type="password" autocomplete="current-password" required
+        /></label>
+        <p id="auth-error" class="error" role="alert"></p>
+        <button type="submit" id="auth-submit">Sign in</button>
+        <button type="button" id="auth-toggle" class="link">No account? Register</button>
+      </form>
+    </section>
+
+    <section id="chat-view" class="chat" hidden>
+      <aside class="sidebar">
+        <header class="sidebar-header">
+          <div>
+            <strong id="me-name"></strong>
+            <div class="muted small" id="connection-status">connecting…</div>
+          </div>
+          <button id="logout" class="link">Log out</button>
+        </header>
+        <div class="search">
+          <input id="user-search" placeholder="Start a chat: search users…" autocomplete="off" />
+          <ul id="search-results" class="search-results"></ul>
+        </div>
+        <ul id="conversation-list" class="conversation-list"></ul>
+      </aside>
+
+      <main class="thread">
+        <header class="thread-header">
+          <strong id="thread-title">Select a conversation</strong>
+          <span id="thread-status" class="muted small"></span>
+        </header>
+        <ol id="messages" class="messages"></ol>
+        <div id="typing" class="typing muted small"></div>
+        <form id="composer" class="composer" hidden>
+          <input
+            id="composer-input"
+            placeholder="Type a message…"
+            autocomplete="off"
+            maxlength="4000"
+          />
+          <button type="submit">Send</button>
+        </form>
+      </main>
+    </section>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
