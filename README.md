@@ -1,15 +1,22 @@
-# Realtime Chat Server
+# Realtime Chat Server + Chatterbox web app
 
 [![CI](https://github.com/ebrahimmorkas/realtime-chat-server/actions/workflows/ci.yml/badge.svg)](https://github.com/ebrahimmorkas/realtime-chat-server/actions/workflows/ci.yml)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?logo=socket.io)
 ![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 A horizontally scalable chat backend in the style of WhatsApp Web or Slack DMs: direct and group
 conversations, live delivery over WebSockets, typing indicators, online presence, read receipts
-and unread counts. It ships with a small demo web client, so you can try it in two browser tabs.
+and unread counts.
+
+It ships with **Chatterbox**, a React + TypeScript web app in [`client/`](client) that the server
+hosts on the same origin. Open it in two browser windows and watch messages, typing indicators,
+presence and read receipts update live.
+
+![Chatterbox, two users chatting side by side](docs/screenshots/two-users.png)
 
 ## Highlights
 
@@ -32,11 +39,56 @@ and unread counts. It ships with a small demo web client, so you can try it in t
 - **Abuse protection**: per-user WebSocket message limits, HTTP rate limits (stricter on auth),
   escaped regex search, Helmet with a strict CSP, and Zod validation on every input.
 
+## Web client (Chatterbox)
+
+| Inbox and conversation                         | Dark mode and group chat                      |
+| ---------------------------------------------- | --------------------------------------------- |
+| ![Chat](docs/screenshots/chat.png)             | ![Dark mode](docs/screenshots/group-dark.png) |
+| **Group management**                           | **Login with demo accounts**                  |
+| ![Group info](docs/screenshots/group-info.png) | ![Login](docs/screenshots/login.png)          |
+
+What it does:
+
+- An inbox sorted by activity, with unread badges, last-message previews and live "typing…"
+  previews. Search filters chats and finds people to message.
+- Conversations with day dividers, grouped bubbles, sender names in groups, edited/deleted
+  markers, and read receipts (✓ sent, ✓✓ seen, "Seen by …" in groups).
+- Presence: online dots, "online" / "last seen 5 minutes ago", and how many group members are
+  online.
+- Edit and delete your own messages. Create groups, rename them, add or remove members, leave.
+- Responsive: two panes on desktop, one at a time on phones. Light and dark themes.
+- One-click demo users (Alice, Bob, Carol) with seeded conversations.
+
+How it is built:
+
+- **React 19 + TypeScript + Vite**, React Router, Tailwind CSS v4.
+- **TanStack Query is the single source of truth.** Socket events (`message:new`,
+  `conversation:read`, `typing`, …) are folded into the query cache by **pure, unit-tested
+  reducer functions**, so REST data and live updates never disagree.
+- **Optimistic sending with exactly-once delivery.** A message appears instantly as "sending",
+  then is matched to the server copy by its `clientId`. That also merges the ack and the
+  broadcast, which can arrive in either order. If the socket is down, it goes over REST. A
+  failed message can be retried with the same `clientId`, so it is never stored twice.
+- **Reconnect-safe.** A banner shows connection state, and after a reconnect the inbox and open
+  histories are refetched to catch up on missed events.
+- **Infinite history.** Older pages load as you scroll up (cursor pagination +
+  `IntersectionObserver`) without the viewport jumping. A "New messages" pill appears when
+  you're scrolled up.
+- **Small live state** (presence, typing with auto-expiry, connection) lives in a tiny external
+  store read through `useSyncExternalStore` selectors, so a typing event doesn't re-render the
+  whole app.
+- **Tests:** Vitest for the cache reducers and the composer's typing logic. **Playwright** runs
+  two users in separate browser contexts against the real server and MongoDB in CI: live
+  delivery, typing indicator, read receipts, unread badges, edit/delete, and group creation.
+
 ## Tech stack
 
 Node.js 20+, TypeScript (strict, ESM), Express 5, Socket.IO 4, MongoDB + Mongoose, JWT, bcrypt,
 Zod, pino, **optional** Redis (ioredis, `@socket.io/redis-adapter`, `rate-limit-redis`),
 Vitest + Supertest + socket.io-client, Docker, nginx, GitHub Actions.
+
+**Web client:** React 19, TypeScript, Vite, React Router, TanStack Query, Socket.IO client,
+React Hook Form, Zod, Tailwind CSS, Playwright.
 
 ## Architecture
 
@@ -95,8 +147,9 @@ REDIS_ENABLED=true docker compose --profile redis up --build  # + Redis
 docker compose -f docker-compose.yml -f docker-compose.scale.yml up --build
 ```
 
-Open http://localhost:4000 in two browser windows (use a private window for the second user),
-register two accounts, search for the other user and start chatting.
+The image builds the React client and the server serves it, so open http://localhost:4000 in two
+browser windows (use a private window for the second user). Run `npm run db:seed` against the
+container's MongoDB (`MONGO_URL=mongodb://localhost:27017/chat`) to get the demo users.
 
 ### Local Node.js
 
@@ -107,8 +160,17 @@ git clone https://github.com/ebrahimmorkas/realtime-chat-server.git
 cd realtime-chat-server
 cp .env.example .env
 npm install
-npm run dev        # http://localhost:4000
+npm run db:seed    # demo users alice, bob, carol, dave, erin (password: Password123!)
+npm run dev        # API + WebSocket on http://localhost:4000
+
+# Web client with hot reload (proxies /api and /socket.io to :4000)
+cd client
+npm install
+npm run dev        # http://localhost:5175
 ```
+
+For a production-style run, `npm run build` inside `client/` creates `client/dist`. The server
+serves it automatically, with an SPA fallback and long-lived caching for fingerprinted assets.
 
 ## REST API
 
@@ -199,6 +261,15 @@ The suite covers REST flows and **end-to-end WebSocket behaviour** with real `so
 connections: delivery, typing, multi-tab presence, room membership changes, read receipts, rate
 limiting, and cross-instance delivery through Redis.
 
+Web client:
+
+```bash
+cd client
+npm test                              # Vitest: cache reducers, composer
+npm run typecheck && npm run lint
+npm run build && npm run test:e2e     # Playwright: two users against the real server
+```
+
 ## Project structure
 
 ```
@@ -216,7 +287,11 @@ src/
     ├── bridge.ts           # domain events → Socket.IO rooms
     ├── presence.ts         # Redis / memory presence stores
     └── rate-limiter.ts     # Redis / memory event limiter
-public/                     # demo web client (vanilla JS)
+client/                     # Chatterbox React app (served from client/dist)
+├── src/features/chat/      # socket provider, cache reducers, inbox, conversation view
+├── src/features/auth/      # login, registration, session
+└── e2e/                    # Playwright two-user tests
+scripts/seed.ts             # demo users and conversations
 deploy/nginx.conf           # sticky-session load balancer for the scaling demo
 ```
 
