@@ -11,3 +11,7 @@ tests
 deploy
 Dockerfile
 docker-compose*.yml
+client/node_modules
+client/dist
+client/playwright-report
+client/test-results
