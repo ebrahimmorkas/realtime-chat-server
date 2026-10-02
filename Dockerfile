@@ -16,7 +16,6 @@ ENV NODE_ENV=production \
     PORT=4000
 COPY --chown=node:node --from=build /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/dist ./dist
-COPY --chown=node:node public ./public
 COPY --chown=node:node package.json ./
 USER node
 EXPOSE 4000
