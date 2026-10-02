@@ -10,12 +10,21 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN npm run build && npm prune --omit=dev
 
+# ---- React client: a static bundle that the API serves from the same origin ----
+FROM node:22-alpine AS client
+WORKDIR /client
+COPY client/package.json client/package-lock.json ./
+RUN npm ci
+COPY client ./
+RUN npm run build
+
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=4000
 COPY --chown=node:node --from=build /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/dist ./dist
+COPY --chown=node:node --from=client /client/dist ./client/dist
 COPY --chown=node:node package.json ./
 USER node
 EXPOSE 4000
